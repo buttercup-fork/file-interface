@@ -1,6 +1,6 @@
-import joinPath from "join-path";
 import { FileSystemInterface } from "../FileSystemInterface.js";
 import { FileIdentifier, FileItem, PathIdentifier, WebDAVInterfaceConfig } from "../types.js";
+import { joinRemotePath } from "../tools/path.js";
 
 /**
  * Normalise a new file or directory name to NFC (composed) Unicode form.
@@ -95,8 +95,8 @@ export class WebDAVInterface extends FileSystemInterface {
         const dirPath = fileIdentifier.identifier
             ? fileIdentifier.identifier
             : parentPathIdentifier
-            ? joinPath(parentPathIdentifier.identifier, normaliseName(fileIdentifier.name))
-            : joinPath("/", normaliseName(fileIdentifier.name));
+            ? joinRemotePath(parentPathIdentifier.identifier, normaliseName(fileIdentifier.name))
+            : joinRemotePath("/", normaliseName(fileIdentifier.name));
         await this.webdavClient.createDirectory(dirPath);
         return {
             identifier: dirPath,
@@ -118,7 +118,7 @@ export class WebDAVInterface extends FileSystemInterface {
     ): Promise<FileIdentifier> {
         const filename = fileIdentifier.identifier
             ? fileIdentifier.identifier
-            : joinPath(parentPathIdentifier.identifier, normaliseName(fileIdentifier.name));
+            : joinRemotePath(parentPathIdentifier.identifier, normaliseName(fileIdentifier.name));
         await this.webdavClient.putFileContents(filename, data);
         return {
             identifier: filename,
