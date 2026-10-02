@@ -1,5 +1,10 @@
 # File Interface changelog
 
+## Unreleased (Codekunde fork)
+
+ * **Bugfix**:
+   * `WebDAVInterface` now normalises the names of new files and folders to NFC Unicode form, so a name with diacritics typed on iOS (NFD form) matches what most WebDAV servers store (buttercup/buttercup-mobile#90). Paths the server returned are sent back unchanged, so existing files with NFD names keep working.
+
 ## v3.0.1
 _2023-07-17_
 

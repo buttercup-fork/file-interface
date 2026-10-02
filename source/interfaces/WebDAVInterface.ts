@@ -2,6 +2,21 @@ import joinPath from "join-path";
 import { FileSystemInterface } from "../FileSystemInterface.js";
 import { FileIdentifier, FileItem, PathIdentifier, WebDAVInterfaceConfig } from "../types.js";
 
+/**
+ * Normalise a new file or directory name to NFC (composed) Unicode form.
+ * iOS/APFS hands out names in NFD (decomposed) form, so a name containing
+ * 'é' can differ byte-for-byte from the NFC form most WebDAV servers
+ * store (buttercup/buttercup-mobile#90). Only names we create are
+ * normalised: identifiers returned by the server are sent back verbatim,
+ * because byte-exact servers would otherwise miss an existing NFD file
+ * (and a save would create a second copy beside it).
+ * @param name The name to normalise
+ * @returns The normalised name
+ */
+function normaliseName(name: string): string {
+    return name.normalize("NFC");
+}
+
 export class WebDAVInterface extends FileSystemInterface {
     webdavClient: any;
 
@@ -80,8 +95,8 @@ export class WebDAVInterface extends FileSystemInterface {
         const dirPath = fileIdentifier.identifier
             ? fileIdentifier.identifier
             : parentPathIdentifier
-            ? joinPath(parentPathIdentifier.identifier, fileIdentifier.name)
-            : joinPath("/", fileIdentifier.name);
+            ? joinPath(parentPathIdentifier.identifier, normaliseName(fileIdentifier.name))
+            : joinPath("/", normaliseName(fileIdentifier.name));
         await this.webdavClient.createDirectory(dirPath);
         return {
             identifier: dirPath,
@@ -103,7 +118,7 @@ export class WebDAVInterface extends FileSystemInterface {
     ): Promise<FileIdentifier> {
         const filename = fileIdentifier.identifier
             ? fileIdentifier.identifier
-            : joinPath(parentPathIdentifier.identifier, fileIdentifier.name);
+            : joinPath(parentPathIdentifier.identifier, normaliseName(fileIdentifier.name));
         await this.webdavClient.putFileContents(filename, data);
         return {
             identifier: filename,
