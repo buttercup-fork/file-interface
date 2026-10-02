@@ -1,6 +1,6 @@
-import joinPath from "join-path";
 import { FileSystemInterface } from "../FileSystemInterface.js";
 import { DropboxInterfaceConfig, FileIdentifier, FileItem, PathIdentifier } from "../types.js";
+import { joinRemotePath } from "../tools/path.js";
 
 export class DropboxInterface extends FileSystemInterface {
     dropboxClient: any;
@@ -72,8 +72,8 @@ export class DropboxInterface extends FileSystemInterface {
         const dirPath = fileIdentifier.identifier
             ? fileIdentifier.identifier
             : parentPathIdentifier
-            ? joinPath(parentPathIdentifier.identifier, fileIdentifier.name)
-            : joinPath("/", fileIdentifier.name);
+            ? joinRemotePath(parentPathIdentifier.identifier, fileIdentifier.name)
+            : joinRemotePath("/", fileIdentifier.name);
         await this.dropboxClient.createDirectory(dirPath);
         return {
             identifier: dirPath,
@@ -96,7 +96,7 @@ export class DropboxInterface extends FileSystemInterface {
     ): Promise<FileIdentifier> {
         const writePath = fileIdentifier.identifier
             ? fileIdentifier.identifier
-            : joinPath(parentPathIdentifier.identifier, fileIdentifier.name);
+            : joinRemotePath(parentPathIdentifier.identifier, fileIdentifier.name);
         return this.dropboxClient.putFileContents(writePath, data).then(() => ({
             identifier: writePath,
             name: fileIdentifier.name

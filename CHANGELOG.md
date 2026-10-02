@@ -4,7 +4,7 @@
 
  * **Bugfix**:
    * `WebDAVInterface` now normalises the names of new files and folders to NFC Unicode form, so a name with diacritics typed on iOS (NFD form) matches what most WebDAV servers store (buttercup/buttercup-mobile#90). Paths the server returned are sent back unchanged, so existing files with NFD names keep working.
-
+   * `WebDAVInterface` and `DropboxInterface` always join remote paths with `/`. On Windows (desktop) they used `\`, so a new vault in a subfolder was created as one file named `\folder\name.bcup` at the server root
 ## v3.0.1
 _2023-07-17_
 
