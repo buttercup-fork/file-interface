@@ -9,6 +9,7 @@
   "scripts": {
     "build": "npm run clean && tsc",
     "clean": "rimraf dist",
+    "prepare": "npm run build",
     "format": "prettier --write '{source,test}/**/*.{js,ts}'",
     "prepublishOnly": "npm run build",
     "test": "run-s build test:specs test:format",
