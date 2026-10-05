@@ -4,6 +4,7 @@
 
  * **Tooling**:
    * A `prepare` script builds `dist/` on install, so the apps can install this fork straight from git (like the other forks)
+   * Specs: the test fixture files are checked out byte for byte (`.gitattributes`). On a Windows checkout with `core.autocrlf` they got CRLF line endings, and `NodeFSInterface`'s "has correct file size" spec failed (15 bytes instead of 14)
 
  * **Bugfix**:
    * `WebDAVInterface` now normalises the names of new files and folders to NFC Unicode form, so a name with diacritics typed on iOS (NFD form) matches what most WebDAV servers store (buttercup/buttercup-mobile#90). Paths the server returned are sent back unchanged, so existing files with NFD names keep working.
