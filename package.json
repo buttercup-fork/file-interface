@@ -31,7 +31,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/buttercup/file-interface.git"
+    "url": "git+https://github.com/buttercup-fork/file-interface.git"
   },
   "publishConfig": {
     "access": "public"
@@ -46,9 +46,12 @@
   "author": "Perry Mitchell <perry@perrymitchell.net>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/buttercup/file-interface/issues"
+    "url": "https://github.com/buttercup-fork/file-interface/issues"
   },
-  "homepage": "https://github.com/buttercup/file-interface#readme",
+  "homepage": "https://github.com/buttercup-fork/file-interface#readme",
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
     "join-path": "^1.1.1",
     "layerr": "^2.0.0"

@@ -2,6 +2,8 @@
 
 ## Unreleased (Codekunde fork)
 
+ * **Breaking**: requires NodeJS 22 or newer (`engines`); CI runs on branch pushes only, on Node 22 and 24
+
  * **Tooling**:
    * A `prepare` script builds `dist/` on install, so the apps can install this fork straight from git (like the other forks)
    * Specs: the test fixture files are checked out byte for byte (`.gitattributes`). On a Windows checkout with `core.autocrlf` they got CRLF line endings, and `NodeFSInterface`'s "has correct file size" spec failed (15 bytes instead of 14)
