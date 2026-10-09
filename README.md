@@ -1,7 +1,7 @@
 # File Interface
 > Client request library interface and explorer
 
-![build status](https://github.com/buttercup/file-interface/actions/workflows/test.yml/badge.svg) [![npm version](https://badge.fury.io/js/%40buttercup%2Ffile-interface.svg)](https://www.npmjs.com/package/@buttercup/file-interface)
+![build status](https://github.com/buttercup-fork/file-interface/actions/workflows/test.yml/badge.svg)
 
 ## About
 
@@ -33,11 +33,11 @@ const webdavInterface = instantiateInterface("webdav", { webdavClient });
 
 ### Installation
 
-Install by running: `npm install @buttercup/file-interface --save`
+Install by running: `npm install github:buttercup-fork/file-interface --save`. This fork isn't published to npm; the package builds itself on install.
 
 ### Environment support
 
-This library supports NodeJS version 16 and above. It is full ESM and therefore requires an environment which supports ECMAScript modules.
+This library supports NodeJS version 22 and above. It is full ESM and therefore requires an environment which supports ECMAScript modules.
 
 ## Usage
 
