@@ -2,7 +2,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import { expect } from "chai";
-import joinPath from "join-path";
 import pify from "pify";
 import rimraf from "rimraf";
 import fileExists from "file-exists";
@@ -61,7 +60,7 @@ describe("NodeFSInterface", function () {
                 const fileItem = this.contents.find(item => item.name === "rootfile.txt");
                 expect(fileItem).to.have.property(
                     "identifier",
-                    joinPath(targetPath, "rootfile.txt")
+                    path.join(targetPath, "rootfile.txt")
                 );
             });
 
@@ -89,7 +88,7 @@ describe("NodeFSInterface", function () {
 
     describe("getFileContents", function () {
         it("returns correct file contents", function () {
-            const filename = joinPath(targetPath, "rootfile.txt");
+            const filename = path.join(targetPath, "rootfile.txt");
             return this.interface.getFileContents({ identifier: filename }).then(contents => {
                 expect(contents.trim()).to.equal("root-file-txt");
             });

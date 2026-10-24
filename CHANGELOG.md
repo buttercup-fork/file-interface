@@ -8,6 +8,9 @@
    * A `prepare` script builds `dist/` on install, so the apps can install this fork straight from git (like the other forks)
    * Specs: the test fixture files are checked out byte for byte (`.gitattributes`). On a Windows checkout with `core.autocrlf` they got CRLF line endings, and `NodeFSInterface`'s "has correct file size" spec failed (15 bytes instead of 14)
 
+ * **Security review fixes** (B-650, B-651, B-652, B-654):
+   * The `join-path` dependency (and `url-join`, `as-array`, `valid-url`) is gone; `NodeFSInterface` uses `path` (B-654)
+
  * **Bugfix**:
    * `WebDAVInterface` now normalises the names of new files and folders to NFC Unicode form, so a name with diacritics typed on iOS (NFD form) matches what most WebDAV servers store (buttercup/buttercup-mobile#90). Paths the server returned are sent back unchanged, so existing files with NFD names keep working.
    * `WebDAVInterface` and `DropboxInterface` always join remote paths with `/`. On Windows (desktop) they used `\`, so a new vault in a subfolder was created as one file named `\folder\name.bcup` at the server root

@@ -1,5 +1,5 @@
+import path from "path";
 import { Layerr } from "layerr";
-import joinPath from "join-path";
 import { FileSystemInterface } from "../FileSystemInterface.js";
 import { FileIdentifier, FileItem, NodeFSInterfaceConfig, PathIdentifier } from "../types.js";
 
@@ -102,8 +102,8 @@ export class NodeFSInterface extends FileSystemInterface {
         const dirPath = fileIdentifier.identifier
             ? fileIdentifier.identifier
             : parentPathIdentifier
-            ? joinPath(parentPathIdentifier.identifier, fileIdentifier.name)
-            : joinPath("/", fileIdentifier.name);
+            ? path.join(String(parentPathIdentifier.identifier), fileIdentifier.name)
+            : path.join("/", fileIdentifier.name);
         await new Promise<void>((resolve, reject) => {
             this.fs.mkdir(dirPath, {}, (err?: Error) => {
                 if (err) {
@@ -132,7 +132,7 @@ export class NodeFSInterface extends FileSystemInterface {
     ): Promise<FileIdentifier> {
         const filename = fileIdentifier.identifier
             ? fileIdentifier.identifier
-            : joinPath(parentPathIdentifier.identifier, fileIdentifier.name);
+            : path.join(String(parentPathIdentifier.identifier), fileIdentifier.name);
         return new Promise((resolve, reject) => {
             this.fs.writeFile(filename, data, err => {
                 if (err) {
@@ -151,7 +151,7 @@ export class NodeFSInterface extends FileSystemInterface {
     }
 
     protected _stat(dir: string, filename: string): Promise<FileItem> {
-        const fullPath = joinPath(dir, filename);
+        const fullPath = path.join(dir, filename);
         return new Promise((resolve, reject) => {
             this.fs.stat(fullPath, (err, stat) => {
                 if (err) {
