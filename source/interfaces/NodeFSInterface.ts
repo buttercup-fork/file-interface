@@ -1,6 +1,7 @@
 import path from "path";
 import { Layerr } from "layerr";
 import { FileSystemInterface } from "../FileSystemInterface.js";
+import { assertSafeName } from "../tools/path.js";
 import { FileIdentifier, FileItem, NodeFSInterfaceConfig, PathIdentifier } from "../types.js";
 
 export class NodeFSInterface extends FileSystemInterface {
@@ -99,11 +100,16 @@ export class NodeFSInterface extends FileSystemInterface {
         parentPathIdentifier: PathIdentifier | null,
         fileIdentifier: FileIdentifier
     ): Promise<FileIdentifier> {
-        const dirPath = fileIdentifier.identifier
-            ? fileIdentifier.identifier
-            : parentPathIdentifier
-            ? path.join(String(parentPathIdentifier.identifier), fileIdentifier.name)
-            : path.join("/", fileIdentifier.name);
+        let dirPath: string;
+        if (fileIdentifier.identifier) {
+            dirPath = fileIdentifier.identifier as string;
+        } else {
+            assertSafeName(fileIdentifier.name);
+            dirPath = path.join(
+                String(parentPathIdentifier?.identifier ?? "/"),
+                fileIdentifier.name
+            );
+        }
         await new Promise<void>((resolve, reject) => {
             this.fs.mkdir(dirPath, {}, (err?: Error) => {
                 if (err) {
@@ -125,14 +131,21 @@ export class NodeFSInterface extends FileSystemInterface {
      * @param data File data
      * @returns A promise that resolves with the identifier of the written file
      */
-    putFileContents(
+    async putFileContents(
         parentPathIdentifier: PathIdentifier,
         fileIdentifier: FileIdentifier,
         data: string
     ): Promise<FileIdentifier> {
-        const filename = fileIdentifier.identifier
-            ? fileIdentifier.identifier
-            : path.join(String(parentPathIdentifier.identifier), fileIdentifier.name);
+        let filename: string;
+        if (fileIdentifier.identifier) {
+            filename = fileIdentifier.identifier as string;
+        } else {
+            assertSafeName(fileIdentifier.name);
+            filename = path.join(
+                String(parentPathIdentifier?.identifier ?? path.sep),
+                fileIdentifier.name
+            );
+        }
         return new Promise((resolve, reject) => {
             this.fs.writeFile(filename, data, err => {
                 if (err) {

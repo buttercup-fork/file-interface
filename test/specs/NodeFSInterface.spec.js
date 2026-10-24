@@ -2,13 +2,24 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import { expect } from "chai";
+import { Layerr } from "layerr";
 import pify from "pify";
 import rimraf from "rimraf";
 import fileExists from "file-exists";
 import dirExists from "directory-exists";
 import { NodeFSInterface } from "../../dist/interfaces/NodeFSInterface.js";
+import { ERR_UNSAFE_NAME } from "../../dist/symbols.js";
 
 const readFile = pify(fs.readFile);
+
+async function rejection(promise) {
+    try {
+        await promise;
+    } catch (err) {
+        return err;
+    }
+    return null;
+}
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const targetPath = path.resolve(__dirname, "../NodeFSInterface-resources");
@@ -156,5 +167,30 @@ describe("NodeFSInterface", function () {
                     });
                 });
         });
+
+        it("creates a new file from a parent and a name", async function () {
+            const result = await this.interface.putFileContents(
+                { identifier: targetPath },
+                { identifier: null, name: "testfile.tmp" },
+                "new"
+            );
+            expect(result.identifier).to.equal(tmpFile);
+            expect(await readFile(tmpFile, "utf8")).to.equal("new");
+        });
+
+        for (const name of ["../escaped.tmp", "a/b.tmp", "a\\b.tmp", "..", ".", ""]) {
+            it(`refuses the name ${JSON.stringify(name)} and writes nothing`, async function () {
+                const before = fs.readdirSync(path.dirname(targetPath)).sort();
+                const err = await rejection(
+                    this.interface.putFileContents(
+                        { identifier: targetPath },
+                        { identifier: null, name },
+                        "x"
+                    )
+                );
+                expect(Layerr.info(err)).to.include({ code: ERR_UNSAFE_NAME });
+                expect(fs.readdirSync(path.dirname(targetPath)).sort()).to.deep.equal(before);
+            });
+        }
     });
 });

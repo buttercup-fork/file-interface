@@ -1,6 +1,6 @@
 import { FileSystemInterface } from "../FileSystemInterface.js";
 import { FileIdentifier, FileItem, PathIdentifier, WebDAVInterfaceConfig } from "../types.js";
-import { joinRemotePath } from "../tools/path.js";
+import { assertSafeName, joinRemotePath } from "../tools/path.js";
 
 /**
  * Normalise a new file or directory name to NFC (composed) Unicode form.
@@ -92,11 +92,16 @@ export class WebDAVInterface extends FileSystemInterface {
         parentPathIdentifier: PathIdentifier | null,
         fileIdentifier: FileIdentifier
     ): Promise<FileIdentifier> {
-        const dirPath = fileIdentifier.identifier
-            ? fileIdentifier.identifier
-            : parentPathIdentifier
-            ? joinRemotePath(parentPathIdentifier.identifier, normaliseName(fileIdentifier.name))
-            : joinRemotePath("/", normaliseName(fileIdentifier.name));
+        let dirPath: string;
+        if (fileIdentifier.identifier) {
+            dirPath = fileIdentifier.identifier as string;
+        } else {
+            assertSafeName(fileIdentifier.name);
+            dirPath = joinRemotePath(
+                parentPathIdentifier ? parentPathIdentifier.identifier : "/",
+                normaliseName(fileIdentifier.name)
+            );
+        }
         await this.webdavClient.createDirectory(dirPath);
         return {
             identifier: dirPath,
@@ -116,9 +121,16 @@ export class WebDAVInterface extends FileSystemInterface {
         fileIdentifier: FileIdentifier,
         data: string
     ): Promise<FileIdentifier> {
-        const filename = fileIdentifier.identifier
-            ? fileIdentifier.identifier
-            : joinRemotePath(parentPathIdentifier.identifier, normaliseName(fileIdentifier.name));
+        let filename: string;
+        if (fileIdentifier.identifier) {
+            filename = fileIdentifier.identifier as string;
+        } else {
+            assertSafeName(fileIdentifier.name);
+            filename = joinRemotePath(
+                parentPathIdentifier?.identifier ?? "/",
+                normaliseName(fileIdentifier.name)
+            );
+        }
         await this.webdavClient.putFileContents(filename, data);
         return {
             identifier: filename,

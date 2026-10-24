@@ -1,6 +1,17 @@
 import { expect } from "chai";
 import sinon from "sinon";
+import { Layerr } from "layerr";
 import { WebDAVInterface } from "../../dist/interfaces/WebDAVInterface.js";
+import { ERR_UNSAFE_NAME } from "../../dist/symbols.js";
+
+async function rejection(promise) {
+    try {
+        await promise;
+    } catch (err) {
+        return err;
+    }
+    return null;
+}
 
 const NFD_NAME = "café.bcup";
 const NFC_NAME = "café.bcup";
@@ -36,9 +47,45 @@ describe("WebDAVInterface", function () {
             );
             expect(this.webdavClient.putFileContents.calledWith(`/vaults/${NFD_NAME}`)).to.be.true;
         });
+
+        it("creates a new file at the root when the parent identifier is null", async function () {
+            await this.interface.putFileContents(
+                { identifier: null },
+                { identifier: null, name: "new.bcup" },
+                "data"
+            );
+            expect(this.webdavClient.putFileContents.firstCall.args[0]).to.equal("/new.bcup");
+        });
+
+        for (const name of ["../x.bcup", "a/b.bcup", "a\\b.bcup", "..", "."]) {
+            it(`refuses the new file name ${JSON.stringify(name)}`, async function () {
+                const err = await rejection(
+                    this.interface.putFileContents(
+                        { identifier: "/vaults" },
+                        { identifier: null, name },
+                        "data"
+                    )
+                );
+                expect(Layerr.info(err)).to.include({ code: ERR_UNSAFE_NAME });
+                expect(this.webdavClient.putFileContents.called).to.be.false;
+            });
+        }
     });
 
     describe("putDirectory", function () {
+        for (const name of ["../x", "a/b", "a\\b", ".."]) {
+            it(`refuses the new directory name ${JSON.stringify(name)}`, async function () {
+                const err = await rejection(
+                    this.interface.putDirectory(
+                        { identifier: "/vaults" },
+                        { identifier: null, name }
+                    )
+                );
+                expect(Layerr.info(err)).to.include({ code: ERR_UNSAFE_NAME });
+                expect(this.webdavClient.createDirectory.called).to.be.false;
+            });
+        }
+
         it("normalises a new directory name to NFC", async function () {
             await this.interface.putDirectory(null, { identifier: null, name: "résumé" });
             expect(this.webdavClient.createDirectory.calledWith("/résumé")).to.be.true;
