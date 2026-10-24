@@ -2,6 +2,8 @@
 
 ## Unreleased (Codekunde fork)
 
+ * **Version 4.0.0** (B-653): the fork has its own version number. Upstream's last npm release is 3.0.1, and the fork carried the same number, so the two could not be told apart. The new-file and name checks below also change behaviour.
+
  * **Breaking**: requires NodeJS 22 or newer (`engines`); CI runs on branch pushes only, on Node 22 and 24
 
  * **Tooling**:
