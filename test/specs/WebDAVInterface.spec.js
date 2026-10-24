@@ -2,7 +2,7 @@ import { expect } from "chai";
 import sinon from "sinon";
 import { Layerr } from "layerr";
 import { WebDAVInterface } from "../../dist/interfaces/WebDAVInterface.js";
-import { ERR_UNSAFE_NAME } from "../../dist/symbols.js";
+import { ERR_FILE_EXISTS, ERR_UNSAFE_NAME } from "../../dist/symbols.js";
 
 async function rejection(promise) {
     try {
@@ -48,6 +48,28 @@ describe("WebDAVInterface", function () {
             expect(this.webdavClient.putFileContents.calledWith(`/vaults/${NFD_NAME}`)).to.be.true;
         });
 
+        it("writes to an existing identifier without the overwrite option", async function () {
+            await this.interface.putFileContents(
+                { identifier: "/vaults" },
+                { identifier: "/vaults/existing.bcup", name: "existing.bcup" },
+                "data"
+            );
+            expect(this.webdavClient.putFileContents.firstCall.args[2]).to.be.undefined;
+        });
+
+        it("creates a new file with overwrite switched off", async function () {
+            await this.interface.putFileContents(
+                { identifier: "/vaults" },
+                { identifier: null, name: "new.bcup" },
+                "data"
+            );
+            expect(this.webdavClient.putFileContents.firstCall.args).to.deep.equal([
+                "/vaults/new.bcup",
+                "data",
+                { overwrite: false }
+            ]);
+        });
+
         it("creates a new file at the root when the parent identifier is null", async function () {
             await this.interface.putFileContents(
                 { identifier: null },
@@ -55,6 +77,33 @@ describe("WebDAVInterface", function () {
                 "data"
             );
             expect(this.webdavClient.putFileContents.firstCall.args[0]).to.equal("/new.bcup");
+        });
+
+        it("reports a 412 for a new file as an existing file", async function () {
+            this.webdavClient.putFileContents.returns(
+                Promise.reject(Object.assign(new Error("Precondition Failed"), { status: 412 }))
+            );
+            const err = await rejection(
+                this.interface.putFileContents(
+                    { identifier: "/vaults" },
+                    { identifier: null, name: "new.bcup" },
+                    "data"
+                )
+            );
+            expect(Layerr.info(err)).to.include({ code: ERR_FILE_EXISTS });
+        });
+
+        it("passes other errors on unchanged", async function () {
+            const failure = Object.assign(new Error("Server Error"), { status: 500 });
+            this.webdavClient.putFileContents.returns(Promise.reject(failure));
+            const err = await rejection(
+                this.interface.putFileContents(
+                    { identifier: "/vaults" },
+                    { identifier: null, name: "new.bcup" },
+                    "data"
+                )
+            );
+            expect(err).to.equal(failure);
         });
 
         for (const name of ["../x.bcup", "a/b.bcup", "a\\b.bcup", "..", "."]) {

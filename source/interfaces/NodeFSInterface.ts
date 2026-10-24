@@ -1,6 +1,7 @@
 import path from "path";
 import { Layerr } from "layerr";
 import { FileSystemInterface } from "../FileSystemInterface.js";
+import { ERR_FILE_EXISTS } from "../symbols.js";
 import { assertSafeName } from "../tools/path.js";
 import { FileIdentifier, FileItem, NodeFSInterfaceConfig, PathIdentifier } from "../types.js";
 
@@ -132,7 +133,8 @@ export class NodeFSInterface extends FileSystemInterface {
     /**
      * Write local file contents. The file is written to a temporary file next
      * to the target, flushed and renamed over it, so an interrupted write
-     * never leaves the target cut off.
+     * never leaves the target cut off. A new file (no identifier) is refused
+     * if one with that name exists.
      * @param parentPathIdentifier The parent path identifier
      * @param fileIdentifier The file identifier to write to
      * @param data File data
@@ -152,6 +154,12 @@ export class NodeFSInterface extends FileSystemInterface {
                 String(parentPathIdentifier?.identifier ?? path.sep),
                 fileIdentifier.name
             );
+            if (await this._exists(filename)) {
+                throw new Layerr(
+                    { info: { code: ERR_FILE_EXISTS } },
+                    `A file with that name already exists: ${filename}`
+                );
+            }
         }
         try {
             await this._writeSafely(filename, data);
@@ -171,6 +179,16 @@ export class NodeFSInterface extends FileSystemInterface {
                 resolve(result as T);
             });
         });
+    }
+
+    protected async _exists(filename: string): Promise<boolean> {
+        try {
+            await this._call("stat", filename);
+            return true;
+        } catch (err) {
+            if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
+            throw err;
+        }
     }
 
     protected async _writeSafely(target: string, data: string): Promise<void> {

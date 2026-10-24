@@ -8,7 +8,7 @@ import rimraf from "rimraf";
 import fileExists from "file-exists";
 import dirExists from "directory-exists";
 import { NodeFSInterface } from "../../dist/interfaces/NodeFSInterface.js";
-import { ERR_UNSAFE_NAME } from "../../dist/symbols.js";
+import { ERR_FILE_EXISTS, ERR_UNSAFE_NAME } from "../../dist/symbols.js";
 
 const readFile = pify(fs.readFile);
 
@@ -181,6 +181,20 @@ describe("NodeFSInterface", function () {
             );
             expect(result.identifier).to.equal(tmpFile);
             expect(await readFile(tmpFile, "utf8")).to.equal("new");
+        });
+
+        it("refuses to replace an existing file when creating a new one", async function () {
+            const existing = path.join(targetPath, "rootfile.txt");
+            const before = await readFile(existing, "utf8");
+            const err = await rejection(
+                this.interface.putFileContents(
+                    { identifier: targetPath },
+                    { identifier: null, name: "rootfile.txt" },
+                    "replacement"
+                )
+            );
+            expect(Layerr.info(err)).to.include({ code: ERR_FILE_EXISTS });
+            expect(await readFile(existing, "utf8")).to.equal(before);
         });
 
         for (const name of ["../escaped.tmp", "a/b.tmp", "a\\b.tmp", "..", ".", ""]) {
