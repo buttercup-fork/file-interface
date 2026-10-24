@@ -1,6 +1,8 @@
+import { Layerr } from "layerr";
 import { FileSystemInterface } from "../FileSystemInterface.js";
+import { ERR_FILE_EXISTS } from "../symbols.js";
 import { FileIdentifier, FileItem, PathIdentifier, WebDAVInterfaceConfig } from "../types.js";
-import { joinRemotePath } from "../tools/path.js";
+import { assertSafeName, joinRemotePath } from "../tools/path.js";
 
 /**
  * Normalise a new file or directory name to NFC (composed) Unicode form.
@@ -92,11 +94,16 @@ export class WebDAVInterface extends FileSystemInterface {
         parentPathIdentifier: PathIdentifier | null,
         fileIdentifier: FileIdentifier
     ): Promise<FileIdentifier> {
-        const dirPath = fileIdentifier.identifier
-            ? fileIdentifier.identifier
-            : parentPathIdentifier
-            ? joinRemotePath(parentPathIdentifier.identifier, normaliseName(fileIdentifier.name))
-            : joinRemotePath("/", normaliseName(fileIdentifier.name));
+        let dirPath: string;
+        if (fileIdentifier.identifier) {
+            dirPath = fileIdentifier.identifier as string;
+        } else {
+            assertSafeName(fileIdentifier.name);
+            dirPath = joinRemotePath(
+                parentPathIdentifier ? parentPathIdentifier.identifier : "/",
+                normaliseName(fileIdentifier.name)
+            );
+        }
         await this.webdavClient.createDirectory(dirPath);
         return {
             identifier: dirPath,
@@ -105,7 +112,8 @@ export class WebDAVInterface extends FileSystemInterface {
     }
 
     /**
-     * Write remote file contents
+     * Write remote file contents. A new file (no identifier) is created with
+     * `If-None-Match: *`, so the server refuses to replace one with that name.
      * @param parentPathIdentifier The parent path to write into
      * @param fileIdentifier The target file to write to
      * @param data File data
@@ -116,10 +124,33 @@ export class WebDAVInterface extends FileSystemInterface {
         fileIdentifier: FileIdentifier,
         data: string
     ): Promise<FileIdentifier> {
-        const filename = fileIdentifier.identifier
-            ? fileIdentifier.identifier
-            : joinRemotePath(parentPathIdentifier.identifier, normaliseName(fileIdentifier.name));
-        await this.webdavClient.putFileContents(filename, data);
+        let filename: string;
+        const isNew = !fileIdentifier.identifier;
+        if (isNew) {
+            assertSafeName(fileIdentifier.name);
+            filename = joinRemotePath(
+                parentPathIdentifier?.identifier ?? "/",
+                normaliseName(fileIdentifier.name)
+            );
+        } else {
+            filename = fileIdentifier.identifier as string;
+        }
+        try {
+            await this.webdavClient.putFileContents(
+                filename,
+                data,
+                isNew ? { overwrite: false } : undefined
+            );
+        } catch (err) {
+            // 412 Precondition Failed: the file appeared since it was listed
+            if (isNew && (err as { status?: number })?.status === 412) {
+                throw new Layerr(
+                    { info: { code: ERR_FILE_EXISTS } },
+                    `A file with that name already exists: ${filename}`
+                );
+            }
+            throw err;
+        }
         return {
             identifier: filename,
             name: fileIdentifier.name

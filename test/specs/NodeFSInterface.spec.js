@@ -2,14 +2,29 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import { expect } from "chai";
-import joinPath from "join-path";
+import { Layerr } from "layerr";
 import pify from "pify";
 import rimraf from "rimraf";
 import fileExists from "file-exists";
 import dirExists from "directory-exists";
 import { NodeFSInterface } from "../../dist/interfaces/NodeFSInterface.js";
+import { ERR_FILE_EXISTS, ERR_UNSAFE_NAME } from "../../dist/symbols.js";
 
 const readFile = pify(fs.readFile);
+
+async function rejection(promise) {
+    try {
+        await promise;
+    } catch (err) {
+        return err;
+    }
+    return null;
+}
+
+// A copy of fs whose listed methods are replaced, to watch or fail one step
+function fsWith(overrides) {
+    return Object.assign({}, fs, overrides);
+}
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const targetPath = path.resolve(__dirname, "../NodeFSInterface-resources");
@@ -61,7 +76,7 @@ describe("NodeFSInterface", function () {
                 const fileItem = this.contents.find(item => item.name === "rootfile.txt");
                 expect(fileItem).to.have.property(
                     "identifier",
-                    joinPath(targetPath, "rootfile.txt")
+                    path.join(targetPath, "rootfile.txt")
                 );
             });
 
@@ -89,7 +104,7 @@ describe("NodeFSInterface", function () {
 
     describe("getFileContents", function () {
         it("returns correct file contents", function () {
-            const filename = joinPath(targetPath, "rootfile.txt");
+            const filename = path.join(targetPath, "rootfile.txt");
             return this.interface.getFileContents({ identifier: filename }).then(contents => {
                 expect(contents.trim()).to.equal("root-file-txt");
             });
@@ -156,6 +171,107 @@ describe("NodeFSInterface", function () {
                         name: "testfile.tmp"
                     });
                 });
+        });
+
+        it("creates a new file from a parent and a name", async function () {
+            const result = await this.interface.putFileContents(
+                { identifier: targetPath },
+                { identifier: null, name: "testfile.tmp" },
+                "new"
+            );
+            expect(result.identifier).to.equal(tmpFile);
+            expect(await readFile(tmpFile, "utf8")).to.equal("new");
+        });
+
+        it("refuses to replace an existing file when creating a new one", async function () {
+            const existing = path.join(targetPath, "rootfile.txt");
+            const before = await readFile(existing, "utf8");
+            const err = await rejection(
+                this.interface.putFileContents(
+                    { identifier: targetPath },
+                    { identifier: null, name: "rootfile.txt" },
+                    "replacement"
+                )
+            );
+            expect(Layerr.info(err)).to.include({ code: ERR_FILE_EXISTS });
+            expect(await readFile(existing, "utf8")).to.equal(before);
+        });
+
+        for (const name of ["../escaped.tmp", "a/b.tmp", "a\\b.tmp", "..", ".", ""]) {
+            it(`refuses the name ${JSON.stringify(name)} and writes nothing`, async function () {
+                const before = fs.readdirSync(path.dirname(targetPath)).sort();
+                const err = await rejection(
+                    this.interface.putFileContents(
+                        { identifier: targetPath },
+                        { identifier: null, name },
+                        "x"
+                    )
+                );
+                expect(Layerr.info(err)).to.include({ code: ERR_UNSAFE_NAME });
+                expect(fs.readdirSync(path.dirname(targetPath)).sort()).to.deep.equal(before);
+            });
+        }
+
+        it("writes through a temporary file renamed over the target", async function () {
+            fs.writeFileSync(tmpFile, "old");
+            const calls = [];
+            const watching = fsWith({
+                open: (file, flags, mode, cb) => {
+                    calls.push(["open", path.basename(file), flags]);
+                    fs.open(file, flags, mode, cb);
+                },
+                rename: (from, to, cb) => {
+                    calls.push(["rename", path.basename(from), path.basename(to)]);
+                    fs.rename(from, to, cb);
+                }
+            });
+            await new NodeFSInterface({ fs: watching }).putFileContents(
+                null,
+                { identifier: tmpFile, name: "testfile.tmp" },
+                "new"
+            );
+            expect(calls).to.have.length(2);
+            expect(calls[0][0]).to.equal("open");
+            expect(calls[0][1]).to.match(/^\.testfile\.tmp\..+\.tmp$/);
+            expect(calls[0][2]).to.equal("wx");
+            expect(calls[1]).to.deep.equal(["rename", calls[0][1], "testfile.tmp"]);
+            expect(await readFile(tmpFile, "utf8")).to.equal("new");
+            expect(
+                fs.readdirSync(targetPath).filter(f => f.endsWith(".tmp") && f !== "testfile.tmp")
+            ).to.deep.equal([]);
+        });
+
+        it("keeps the old contents and removes the temporary file when the write fails", async function () {
+            fs.writeFileSync(tmpFile, "old");
+            const failing = fsWith({
+                rename: (from, to, cb) => cb(Object.assign(new Error("disk"), { code: "EIO" }))
+            });
+            const err = await rejection(
+                new NodeFSInterface({ fs: failing }).putFileContents(
+                    null,
+                    { identifier: tmpFile, name: "testfile.tmp" },
+                    "new"
+                )
+            );
+            expect(err).to.be.an("error");
+            expect(await readFile(tmpFile, "utf8")).to.equal("old");
+            expect(
+                fs.readdirSync(targetPath).filter(f => f.endsWith(".tmp") && f !== "testfile.tmp")
+            ).to.deep.equal([]);
+        });
+
+        it("writes in place when the folder refuses new files", async function () {
+            fs.writeFileSync(tmpFile, "old");
+            const refusing = fsWith({
+                open: (file, flags, mode, cb) =>
+                    cb(Object.assign(new Error("denied"), { code: "EACCES" }))
+            });
+            await new NodeFSInterface({ fs: refusing }).putFileContents(
+                null,
+                { identifier: tmpFile, name: "testfile.tmp" },
+                "new"
+            );
+            expect(await readFile(tmpFile, "utf8")).to.equal("new");
         });
     });
 });

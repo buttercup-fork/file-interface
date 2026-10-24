@@ -1,6 +1,8 @@
+import { Layerr } from "layerr";
 import { FileSystemInterface } from "../FileSystemInterface.js";
+import { ERR_FILE_EXISTS } from "../symbols.js";
 import { DropboxInterfaceConfig, FileIdentifier, FileItem, PathIdentifier } from "../types.js";
-import { joinRemotePath } from "../tools/path.js";
+import { assertSafeName, joinRemotePath } from "../tools/path.js";
 
 export class DropboxInterface extends FileSystemInterface {
     dropboxClient: any;
@@ -69,11 +71,16 @@ export class DropboxInterface extends FileSystemInterface {
         parentPathIdentifier: PathIdentifier | null,
         fileIdentifier: FileIdentifier
     ): Promise<FileIdentifier> {
-        const dirPath = fileIdentifier.identifier
-            ? fileIdentifier.identifier
-            : parentPathIdentifier
-            ? joinRemotePath(parentPathIdentifier.identifier, fileIdentifier.name)
-            : joinRemotePath("/", fileIdentifier.name);
+        let dirPath: string;
+        if (fileIdentifier.identifier) {
+            dirPath = fileIdentifier.identifier as string;
+        } else {
+            assertSafeName(fileIdentifier.name);
+            dirPath = joinRemotePath(
+                parentPathIdentifier ? parentPathIdentifier.identifier : "/",
+                fileIdentifier.name
+            );
+        }
         await this.dropboxClient.createDirectory(dirPath);
         return {
             identifier: dirPath,
@@ -82,24 +89,41 @@ export class DropboxInterface extends FileSystemInterface {
     }
 
     /**
-     * Write remote file contents
+     * Write remote file contents. A new file (no identifier) is refused if
+     * the folder already holds one with that name (compared without regard to
+     * case, as Dropbox does). The check and the write are two requests, so a
+     * file created in between is still replaced.
      * @param parentPathIdentifier The parent path identifier
      * @param fileIdentifier The target file identifier
      * @param data File data
      * @returns A promise resolving with the identifier of
      *  the written file
      */
-    putFileContents(
+    async putFileContents(
         parentPathIdentifier: PathIdentifier,
         fileIdentifier: FileIdentifier,
         data: string
     ): Promise<FileIdentifier> {
-        const writePath = fileIdentifier.identifier
-            ? fileIdentifier.identifier
-            : joinRemotePath(parentPathIdentifier.identifier, fileIdentifier.name);
-        return this.dropboxClient.putFileContents(writePath, data).then(() => ({
+        let writePath: string;
+        if (fileIdentifier.identifier) {
+            writePath = fileIdentifier.identifier as string;
+        } else {
+            assertSafeName(fileIdentifier.name);
+            const parent = String(parentPathIdentifier?.identifier ?? "/");
+            const existing = await this.dropboxClient.getDirectoryContents(parent);
+            const wanted = fileIdentifier.name.toLowerCase();
+            if (existing.some(item => String(item.name).toLowerCase() === wanted)) {
+                throw new Layerr(
+                    { info: { code: ERR_FILE_EXISTS } },
+                    `A file with that name already exists in ${parent}`
+                );
+            }
+            writePath = joinRemotePath(parent, fileIdentifier.name);
+        }
+        await this.dropboxClient.putFileContents(writePath, data);
+        return {
             identifier: writePath,
             name: fileIdentifier.name
-        }));
+        };
     }
 }

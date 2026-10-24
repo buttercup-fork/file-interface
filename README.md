@@ -103,6 +103,12 @@ fsInterface.putFileContents(
 });
 ```
 
+### New files and names
+
+Writing a new file (`identifier: null`) or creating a directory builds the path from the parent and the name. The name may not be empty, `.` or `..`, or contain `/`, `\` or a NUL character (Google Drive names are not paths and are not checked); such a name throws an error with `code: ERR_UNSAFE_NAME` in its [Layerr](https://github.com/perry-mitchell/layerr) info.
+
+A new file is not allowed to replace an existing one: the error has `code: ERR_FILE_EXISTS`. WebDAV asks the server (`If-None-Match: *`); Dropbox and the local interface check first, so a file created in between can still be replaced. Writing to an existing identifier replaces the file as before. The local interface writes to a temporary file next to the target, flushes it and renames it over the target.
+
 ### Supported fields
 
 When calling `getDirectoryContents`, some base fields are always available:

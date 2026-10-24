@@ -2,11 +2,19 @@
 
 ## Unreleased (Codekunde fork)
 
+ * **Version 4.0.0** (B-653): the fork has its own version number. Upstream's last npm release is 3.0.1, and the fork carried the same number, so the two could not be told apart. The new-file and name checks below also change behaviour.
+
  * **Breaking**: requires NodeJS 22 or newer (`engines`); CI runs on branch pushes only, on Node 22 and 24
 
  * **Tooling**:
    * A `prepare` script builds `dist/` on install, so the apps can install this fork straight from git (like the other forks)
    * Specs: the test fixture files are checked out byte for byte (`.gitattributes`). On a Windows checkout with `core.autocrlf` they got CRLF line endings, and `NodeFSInterface`'s "has correct file size" spec failed (15 bytes instead of 14)
+
+ * **Security review fixes** (B-650, B-651, B-652, B-654):
+   * Names of new files and directories are refused when empty, `.`, `..` or containing `/`, `\` or NUL (`ERR_UNSAFE_NAME`); `NodeFSInterface`, `WebDAVInterface` and `DropboxInterface` (B-650)
+   * `NodeFSInterface` writes through a temporary file that is flushed and renamed over the target, instead of truncating the target first. It falls back to an in-place write if the folder refuses new files. A symbolic link at the target is replaced by the file rather than followed (B-651)
+   * A new file (no identifier) no longer replaces an existing one: `ERR_FILE_EXISTS`. WebDAV sends `If-None-Match: *`; Dropbox (case-insensitive) and the local interface check first (B-652)
+   * The `join-path` dependency (and `url-join`, `as-array`, `valid-url`) is gone; `NodeFSInterface` uses `path` (B-654)
 
  * **Bugfix**:
    * `WebDAVInterface` now normalises the names of new files and folders to NFC Unicode form, so a name with diacritics typed on iOS (NFD form) matches what most WebDAV servers store (buttercup/buttercup-mobile#90). Paths the server returned are sent back unchanged, so existing files with NFD names keep working.

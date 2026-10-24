@@ -1,7 +1,14 @@
+import path from "path";
 import { Layerr } from "layerr";
-import joinPath from "join-path";
 import { FileSystemInterface } from "../FileSystemInterface.js";
+import { ERR_FILE_EXISTS } from "../symbols.js";
+import { assertSafeName } from "../tools/path.js";
 import { FileIdentifier, FileItem, NodeFSInterfaceConfig, PathIdentifier } from "../types.js";
+
+// Errors that mean the folder or file refuses the temporary-file route
+const ACCESS_ERRORS = ["EACCES", "EPERM", "EBUSY"];
+
+let tempCounter = 0;
 
 export class NodeFSInterface extends FileSystemInterface {
     fs: any;
@@ -99,11 +106,16 @@ export class NodeFSInterface extends FileSystemInterface {
         parentPathIdentifier: PathIdentifier | null,
         fileIdentifier: FileIdentifier
     ): Promise<FileIdentifier> {
-        const dirPath = fileIdentifier.identifier
-            ? fileIdentifier.identifier
-            : parentPathIdentifier
-            ? joinPath(parentPathIdentifier.identifier, fileIdentifier.name)
-            : joinPath("/", fileIdentifier.name);
+        let dirPath: string;
+        if (fileIdentifier.identifier) {
+            dirPath = fileIdentifier.identifier as string;
+        } else {
+            assertSafeName(fileIdentifier.name);
+            dirPath = path.join(
+                String(parentPathIdentifier?.identifier ?? "/"),
+                fileIdentifier.name
+            );
+        }
         await new Promise<void>((resolve, reject) => {
             this.fs.mkdir(dirPath, {}, (err?: Error) => {
                 if (err) {
@@ -119,31 +131,94 @@ export class NodeFSInterface extends FileSystemInterface {
     }
 
     /**
-     * Write local file contents
+     * Write local file contents. The file is written to a temporary file next
+     * to the target, flushed and renamed over it, so an interrupted write
+     * never leaves the target cut off. A new file (no identifier) is refused
+     * if one with that name exists.
      * @param parentPathIdentifier The parent path identifier
      * @param fileIdentifier The file identifier to write to
      * @param data File data
      * @returns A promise that resolves with the identifier of the written file
      */
-    putFileContents(
+    async putFileContents(
         parentPathIdentifier: PathIdentifier,
         fileIdentifier: FileIdentifier,
         data: string
     ): Promise<FileIdentifier> {
-        const filename = fileIdentifier.identifier
-            ? fileIdentifier.identifier
-            : joinPath(parentPathIdentifier.identifier, fileIdentifier.name);
-        return new Promise((resolve, reject) => {
-            this.fs.writeFile(filename, data, err => {
-                if (err) {
-                    return reject(new Layerr(err, `Error writing file: ${filename}`));
-                }
-                resolve({
-                    identifier: filename,
-                    name: fileIdentifier.name
-                });
+        let filename: string;
+        if (fileIdentifier.identifier) {
+            filename = fileIdentifier.identifier as string;
+        } else {
+            assertSafeName(fileIdentifier.name);
+            filename = path.join(
+                String(parentPathIdentifier?.identifier ?? path.sep),
+                fileIdentifier.name
+            );
+            if (await this._exists(filename)) {
+                throw new Layerr(
+                    { info: { code: ERR_FILE_EXISTS } },
+                    `A file with that name already exists: ${filename}`
+                );
+            }
+        }
+        try {
+            await this._writeSafely(filename, data);
+        } catch (err) {
+            throw new Layerr(err, `Error writing file: ${filename}`);
+        }
+        return {
+            identifier: filename,
+            name: fileIdentifier.name
+        };
+    }
+
+    protected _call<T = any>(method: string, ...args: Array<any>): Promise<T> {
+        return new Promise<T>((resolve, reject) => {
+            this.fs[method](...args, (err: Error | null, result?: T) => {
+                if (err) return reject(err);
+                resolve(result as T);
             });
         });
+    }
+
+    protected async _exists(filename: string): Promise<boolean> {
+        try {
+            await this._call("stat", filename);
+            return true;
+        } catch (err) {
+            if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
+            throw err;
+        }
+    }
+
+    protected async _writeSafely(target: string, data: string): Promise<void> {
+        let mode = 0o666;
+        try {
+            const stat = await this._call("stat", target);
+            mode = stat.mode & 0o777;
+        } catch (err) {
+            if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+        }
+        const tempPath = path.join(
+            path.dirname(target),
+            `.${path.basename(target)}.${Date.now()}-${++tempCounter}.tmp`
+        );
+        try {
+            const fd = await this._call<number>("open", tempPath, "wx", mode);
+            try {
+                await this._call("writeFile", fd, data);
+                await this._call("fsync", fd);
+            } finally {
+                await this._call("close", fd);
+            }
+            await this._call("rename", tempPath, target);
+        } catch (err) {
+            await this._call("unlink", tempPath).catch(() => {});
+            if (!ACCESS_ERRORS.includes((err as NodeJS.ErrnoException).code as string)) throw err;
+            // The folder doesn't allow new files, or another program holds
+            // the target open: write it in place, as before
+            await this._call("writeFile", target, data);
+        }
     }
 
     protected _filenamesToStats(dir: string, filenames: Array<string>): Promise<Array<FileItem>> {
@@ -151,7 +226,7 @@ export class NodeFSInterface extends FileSystemInterface {
     }
 
     protected _stat(dir: string, filename: string): Promise<FileItem> {
-        const fullPath = joinPath(dir, filename);
+        const fullPath = path.join(dir, filename);
         return new Promise((resolve, reject) => {
             this.fs.stat(fullPath, (err, stat) => {
                 if (err) {

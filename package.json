@@ -1,6 +1,6 @@
 {
   "name": "@buttercup/file-interface",
-  "version": "3.0.1",
+  "version": "4.0.0",
   "description": "Client request library interface and explorer",
   "exports": "./dist/index.js",
   "react-native": "./dist/index.js",
@@ -53,7 +53,6 @@
     "node": ">=22"
   },
   "dependencies": {
-    "join-path": "^1.1.1",
     "layerr": "^2.0.0"
   },
   "devDependencies": {
