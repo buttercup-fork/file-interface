@@ -107,6 +107,8 @@ fsInterface.putFileContents(
 
 Writing a new file (`identifier: null`) or creating a directory builds the path from the parent and the name. The name may not be empty, `.` or `..`, or contain `/`, `\` or a NUL character (Google Drive names are not paths and are not checked); such a name throws an error with `code: ERR_UNSAFE_NAME` in its [Layerr](https://github.com/perry-mitchell/layerr) info.
 
+The local interface writes to a temporary file next to the target, flushes it and renames it over the target.
+
 ### Supported fields
 
 When calling `getDirectoryContents`, some base fields are always available:

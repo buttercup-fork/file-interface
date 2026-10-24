@@ -10,6 +10,7 @@
 
  * **Security review fixes** (B-650, B-651, B-652, B-654):
    * Names of new files and directories are refused when empty, `.`, `..` or containing `/`, `\` or NUL (`ERR_UNSAFE_NAME`); `NodeFSInterface`, `WebDAVInterface` and `DropboxInterface` (B-650)
+   * `NodeFSInterface` writes through a temporary file that is flushed and renamed over the target, instead of truncating the target first. It falls back to an in-place write if the folder refuses new files. A symbolic link at the target is replaced by the file rather than followed (B-651)
    * The `join-path` dependency (and `url-join`, `as-array`, `valid-url`) is gone; `NodeFSInterface` uses `path` (B-654)
 
  * **Bugfix**:

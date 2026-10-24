@@ -20,6 +20,11 @@ async function rejection(promise) {
     }
     return null;
 }
+
+// A copy of fs whose listed methods are replaced, to watch or fail one step
+function fsWith(overrides) {
+    return Object.assign({}, fs, overrides);
+}
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const targetPath = path.resolve(__dirname, "../NodeFSInterface-resources");
@@ -192,5 +197,67 @@ describe("NodeFSInterface", function () {
                 expect(fs.readdirSync(path.dirname(targetPath)).sort()).to.deep.equal(before);
             });
         }
+
+        it("writes through a temporary file renamed over the target", async function () {
+            fs.writeFileSync(tmpFile, "old");
+            const calls = [];
+            const watching = fsWith({
+                open: (file, flags, mode, cb) => {
+                    calls.push(["open", path.basename(file), flags]);
+                    fs.open(file, flags, mode, cb);
+                },
+                rename: (from, to, cb) => {
+                    calls.push(["rename", path.basename(from), path.basename(to)]);
+                    fs.rename(from, to, cb);
+                }
+            });
+            await new NodeFSInterface({ fs: watching }).putFileContents(
+                null,
+                { identifier: tmpFile, name: "testfile.tmp" },
+                "new"
+            );
+            expect(calls).to.have.length(2);
+            expect(calls[0][0]).to.equal("open");
+            expect(calls[0][1]).to.match(/^\.testfile\.tmp\..+\.tmp$/);
+            expect(calls[0][2]).to.equal("wx");
+            expect(calls[1]).to.deep.equal(["rename", calls[0][1], "testfile.tmp"]);
+            expect(await readFile(tmpFile, "utf8")).to.equal("new");
+            expect(
+                fs.readdirSync(targetPath).filter(f => f.endsWith(".tmp") && f !== "testfile.tmp")
+            ).to.deep.equal([]);
+        });
+
+        it("keeps the old contents and removes the temporary file when the write fails", async function () {
+            fs.writeFileSync(tmpFile, "old");
+            const failing = fsWith({
+                rename: (from, to, cb) => cb(Object.assign(new Error("disk"), { code: "EIO" }))
+            });
+            const err = await rejection(
+                new NodeFSInterface({ fs: failing }).putFileContents(
+                    null,
+                    { identifier: tmpFile, name: "testfile.tmp" },
+                    "new"
+                )
+            );
+            expect(err).to.be.an("error");
+            expect(await readFile(tmpFile, "utf8")).to.equal("old");
+            expect(
+                fs.readdirSync(targetPath).filter(f => f.endsWith(".tmp") && f !== "testfile.tmp")
+            ).to.deep.equal([]);
+        });
+
+        it("writes in place when the folder refuses new files", async function () {
+            fs.writeFileSync(tmpFile, "old");
+            const refusing = fsWith({
+                open: (file, flags, mode, cb) =>
+                    cb(Object.assign(new Error("denied"), { code: "EACCES" }))
+            });
+            await new NodeFSInterface({ fs: refusing }).putFileContents(
+                null,
+                { identifier: tmpFile, name: "testfile.tmp" },
+                "new"
+            );
+            expect(await readFile(tmpFile, "utf8")).to.equal("new");
+        });
     });
 });
